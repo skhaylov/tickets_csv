@@ -106,7 +106,6 @@ class PartyParser(CommonParser):
         else:
             self.address2 = ''
 
-
         try:
             i += 1
             country_city = items[i]
@@ -128,6 +127,52 @@ class PartyParser(CommonParser):
                 self.zip_code]
 
 
+class LotParser(CommonParser):
+    unique_key = None
+    borough = None
+    block = None
+    lot = None
+    easement = None
+    partial_lot = None
+    air_rights = None
+    subterranean_rights = None
+    property_type = None
+    street_number = None
+    address = None
+    unit = None
+
+    def process(self, row):
+        import re
+
+        items = [item.strip() for item in re.split('\s{3}', row)
+                 if item.strip()]
+
+        self.borough = items[0][17]
+        self.block = items[0][18:23].lstrip('0')
+        self.lot = items[0][23:27].lstrip('0')
+        self.easement = items[0][27]
+        self.partial_lot = items[0][28]
+        self.air_rights = items[0][29]
+        self.subterranean_rights = items[0][30]
+        self.property_type = items[0][31:33]
+        self.street_number = items[0][33:]
+
+        try:
+            self.address = items[1]
+            if items[2].strip().lower() == 'street':
+                self.address += ' ' + items[2]
+            else:
+                self.unit = items[2]
+        except IndexError:
+            pass
+
+    def to_csv_row(self):
+        return [self.unique_key, 'L', self.borough, self.block, self.lot,
+                self.easement, self.partial_lot, self.air_rights,
+                self.subterranean_rights, self.property_type,
+                self.street_number, self.address, self.unit]
+
+
 def get_record_type(value):
     return value[16]
 
@@ -135,6 +180,7 @@ def get_record_type(value):
 PARSERS = {
     'A': MasterParser,
     'P': PartyParser,
+    'L': LotParser,
 }
 
 
@@ -143,6 +189,7 @@ def run(source):
 
     master_parsers = []
     party_parsers = []
+    lot_parsers = []
 
     for row in open(source, 'rb').readlines():
         report_type = get_record_type(row)
@@ -158,6 +205,10 @@ def run(source):
             if report_type == 'P':
                 parser.unique_key = unique_key
                 party_parsers.append(parser)
+
+            if report_type == 'L':
+                parser.unique_key = unique_key
+                lot_parsers.append(parser)
         except KeyError:
             pass
 
@@ -166,6 +217,9 @@ def run(source):
 
     if party_parsers:
         PartyParser.write_to_csv('party.my.csv', party_parsers)
+
+    if lot_parsers:
+        LotParser.write_to_csv('lot.my.csv', lot_parsers)
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
