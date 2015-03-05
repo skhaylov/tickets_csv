@@ -193,22 +193,26 @@ def run(source):
 
     for row in open(source, 'rb').readlines():
         report_type = get_record_type(row)
+        parser_list = None
+
         try:
             parser = PARSERS[report_type]()
             parser.process(row)
 
             if report_type == 'A':
                 unique_key = parser.unique_key
-                # print unique_key
-                master_parsers.append(parser)
+                parser_list = master_parsers
+
+            else:
+                parser.unique_key = unique_key
 
             if report_type == 'P':
-                parser.unique_key = unique_key
-                party_parsers.append(parser)
+                parser_list = party_parsers
 
             if report_type == 'L':
-                parser.unique_key = unique_key
-                lot_parsers.append(parser)
+                parser_list = lot_parsers
+
+            parser_list.append(parser)
         except KeyError:
             pass
 
