@@ -3,227 +3,183 @@
 
 __author__ = 'skhaylov'
 
+import re
 import sys
 import csv
 
 
-class CommonParser(object):
-    unique_key = None
-
-    def process(self, row):
-        raise NotImplementedError()
-
-    def to_csv_row(self):
-        raise NotImplementedError()
-
-    @classmethod
-    def write_to_csv(cls, filename, instances):
-        if not isinstance(instances, (list, tuple, set)):
-            instances = list(instances)
-
-        with open(filename, 'wb+') as csvfile:
-            writer = csv.writer(csvfile, delimiter='|',
-                                quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            for instance in instances:
-                writer.writerow(instance.to_csv_row())
+split_row = lambda row: [s.strip() for s in re.split('\s{3}', row) if s.strip()]
+get_record_type = lambda value: value[16]
 
 
-class MasterParser(CommonParser):
-    date_file = None
-    crfn = None
-    recorded_borough = None
-    doc_type = None
-    document_date = None
-    document_amount = None
-    recorded_date = None
-    modified_date = None
+def write_to_csv(filename, rows):
+    if not isinstance(rows, (list, tuple, set)):
+        rows = list(rows)
 
-    def process(self, row):
-        self.unique_key = row[55:76]
-        self.date_file = row[17:27]
-        self.crfn = row[27:40]
-        self.recorded_borough = row[40]
-        self.doc_type = row[41:49]
-        self.document_date = row[49:59]
-        self.document_amount = row[59:76].lstrip('0')
-        self.recorded_date = row[76:86]
-
-        if self.document_amount.replace('0', '').strip() == '.':
-            self.document_amount = '$-'
-
-        row_copy = row[:]
-        row_copy = row_copy.replace(' ', '')
-        chunks = row_copy.split('/')[-3:]
-        self.modified_date = '/'.join([chunks[0][-2:], chunks[1], chunks[2][:4]])
-
-    def to_csv_row(self):
-        return [self.unique_key, 'A', self.date_file, self.crfn,
-                self.recorded_borough, self.doc_type, self.document_date,
-                self.document_amount, self.recorded_date,
-                self.modified_date]
+    with open(filename, 'wb') as csvfile:
+        writer = csv.writer(csvfile, delimiter='|',
+                            quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        for row in rows:
+            try:
+                writer.writerow(row)
+            except:
+                import pdb;pdb.set_trace()
 
 
-class PartyParser(CommonParser):
-    unique_key = None
-    party_type = None
-    name = None
-    address1 = None
-    address2 = None
-    country = None
-    city = None
-    state = None
-    zip_code = None
 
-    def process(self, row):
-        import re
+def parse_master_row(row, unique_key=None):
+    # Unique_key arg NOT USED!
+    unique_key = row[55:76]
+    date_file = row[17:27]
+    crfn = row[27:40]
+    recorded_borough = row[40]
+    doc_type = row[41:49]
+    document_date = row[49:59]
+    document_amount = row[59:76].lstrip('0')
+    recorded_date = row[76:86]
 
-        def clean_text(value):
-            value = value.strip()
+    if document_amount.replace('0', '').strip() == '.':
+        document_amount = '$-'
 
-            if value.startswith('|'):
-                value = value[1:]
+    row_copy = row[:]
+    row_copy = row_copy.replace(' ', '')
+    chunks = row_copy.split('/')[-3:]
+    modified_date = '/'.join([chunks[0][-2:], chunks[1], chunks[2][:4]])
 
-            if value.endswith('|'):
-                value = value[:-1]
+    return [unique_key, 'A', date_file, crfn, recorded_borough, doc_type,
+            document_date, document_amount, recorded_date, modified_date]
 
-            return value
 
-        self.party_type = row[17]
-        items = [item.strip() for item in re.split('\s{3}', row)
-                 if item.strip()]
+def parse_party_row(row, unique_key):
+    def clean_text(value):
+        value = value.strip()
 
-        self.name = clean_text(items[0][18:])
+        if value.startswith('|'):
+            value = value[1:]
 
-        if not items or len(items) < 3:
-            return
+        if value.endswith('|'):
+            value = value[:-1]
 
-        i = 1
-        self.address1 = clean_text(items[i])
+        return value
 
-        if len(items) > 4:
-            i += 1
-            self.address2 = clean_text(items[i])
+    party_type = row[17]
+    items = split_row(row)
+
+    name = clean_text(items[0][18:])
+
+    if not items or len(items) < 3:
+        return
+
+    i = 1
+    address1 = clean_text(items[i])
+
+    if len(items) > 4:
+        i += 1
+        address2 = clean_text(items[i])
+    else:
+        address2 = ''
+
+    try:
+        i += 1
+        country_city = items[i]
+        country = clean_text(country_city[:2])
+        city = clean_text(country_city[2:])
+
+        i += 1
+        state_zip = items[i]
+        state = clean_text(state_zip[:-5])
+        zip_code = clean_text(state_zip[-5:])
+
+    except IndexError:
+        return
+
+    return [unique_key, 'P', party_type, name,
+            address1, address2, country, city, state,
+            zip_code]
+
+
+def parse_lot_row(row, unique_key):
+    items = split_row(row)
+
+    borough = items[0][17]
+    block = items[0][18:23].lstrip('0')
+    lot = items[0][23:27].lstrip('0')
+    easement = items[0][27]
+    partial_lot = items[0][28]
+    air_rights = items[0][29]
+    subterranean_rights = items[0][30]
+    property_type = items[0][31:33]
+    street_number = items[0][33:]
+
+    address, unit = '', ''
+
+    try:
+        address = items[1]
+        if items[2].strip().lower() == 'street':
+            address += ' ' + items[2]
         else:
-            self.address2 = ''
+            unit = items[2]
+    except IndexError:
+        pass
 
-        try:
-            i += 1
-            country_city = items[i]
-            self.country = clean_text(country_city[:2])
-            self.city = clean_text(country_city[2:])
-
-            i += 1
-            state_zip = items[i]
-            self.state = clean_text(state_zip[:-5])
-            self.zip_code = clean_text(state_zip[-5:])
-
-        except IndexError:
-            # import pdb;pdb.set_trace()
-            return
-
-    def to_csv_row(self):
-        return [self.unique_key, 'P', self.party_type, self.name,
-                self.address1, self.address2, self.country, self.state,
-                self.zip_code]
-
-
-class LotParser(CommonParser):
-    unique_key = None
-    borough = None
-    block = None
-    lot = None
-    easement = None
-    partial_lot = None
-    air_rights = None
-    subterranean_rights = None
-    property_type = None
-    street_number = None
-    address = None
-    unit = None
-
-    def process(self, row):
-        import re
-
-        items = [item.strip() for item in re.split('\s{3}', row)
-                 if item.strip()]
-
-        self.borough = items[0][17]
-        self.block = items[0][18:23].lstrip('0')
-        self.lot = items[0][23:27].lstrip('0')
-        self.easement = items[0][27]
-        self.partial_lot = items[0][28]
-        self.air_rights = items[0][29]
-        self.subterranean_rights = items[0][30]
-        self.property_type = items[0][31:33]
-        self.street_number = items[0][33:]
-
-        try:
-            self.address = items[1]
-            if items[2].strip().lower() == 'street':
-                self.address += ' ' + items[2]
-            else:
-                self.unit = items[2]
-        except IndexError:
-            pass
-
-    def to_csv_row(self):
-        return [self.unique_key, 'L', self.borough, self.block, self.lot,
-                self.easement, self.partial_lot, self.air_rights,
-                self.subterranean_rights, self.property_type,
-                self.street_number, self.address, self.unit]
-
-
-def get_record_type(value):
-    return value[16]
+    return [unique_key, 'L', borough, block, lot,
+            easement, partial_lot, air_rights,
+            subterranean_rights, property_type,
+            street_number, address, unit]
 
 
 PARSERS = {
-    'A': MasterParser,
-    'P': PartyParser,
-    'L': LotParser,
+    'A': (parse_master_row, 'master.my.csv'),
+    'P': (parse_party_row, 'party.my.csv'),
+    'L': (parse_lot_row, 'lot.my.csv'),
 }
 
 
 def run(source):
     unique_key = None
 
-    master_parsers = []
-    party_parsers = []
-    lot_parsers = []
+    master_parsed_rows = []
+    party_parsed_rows = []
+    lot_parsed_rows = []
 
     for row in open(source, 'rb').readlines():
         report_type = get_record_type(row)
         parser_list = None
 
         try:
-            parser = PARSERS[report_type]()
-            parser.process(row)
+            parse_func = PARSERS[report_type][0]
+            result = parse_func(row, unique_key)
+
+            if not result:
+                continue
 
             if report_type == 'A':
-                unique_key = parser.unique_key
-                parser_list = master_parsers
-
-            else:
-                parser.unique_key = unique_key
+                unique_key = result[0]
+                parser_list = master_parsed_rows
 
             if report_type == 'P':
-                parser_list = party_parsers
+                parser_list = party_parsed_rows
 
             if report_type == 'L':
-                parser_list = lot_parsers
+                parser_list = lot_parsed_rows
 
-            parser_list.append(parser)
+            parser_list.append(result)
         except KeyError:
             pass
 
-    if master_parsers:
-        MasterParser.write_to_csv('master.my.csv', master_parsers)
+    write_lists = (
+        (PARSERS['A'][1], master_parsed_rows),
+        (PARSERS['P'][1], party_parsed_rows),
+        (PARSERS['L'][1], lot_parsed_rows),
+    )
 
-    if party_parsers:
-        PartyParser.write_to_csv('party.my.csv', party_parsers)
+    for item in write_lists:
+        rows = item[1]
+        filename = item[0]
 
-    if lot_parsers:
-        LotParser.write_to_csv('lot.my.csv', lot_parsers)
+        if rows:
+            write_to_csv(filename, rows)
+
 
 if __name__ == '__main__':
     if len(sys.argv) == 2:
