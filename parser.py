@@ -178,17 +178,23 @@ def run(source_file):
     party_parsed_rows = []
     lot_parsed_rows = []
 
+    # Reading source file row by row
     for row in open(source_file, 'r').readlines():
         report_type = get_record_type(row)
         parser_list = None
 
         try:
+            # We are looking for a method to parse the string based on the
+            # value report_type (A, P or L)
+
             parse_func = PARSERS[report_type][0]
             result = parse_func(row, unique_key)
 
             if not result:
                 continue
 
+            # Remember the unique key and add the result of parsing a string
+            # to a specific list. Each list will be saved to a separate file
             if report_type == 'A':
                 unique_key = result[0]
                 parser_list = master_parsed_rows
@@ -219,4 +225,5 @@ def run(source_file):
 
 
 if __name__ == '__main__':
+    # Begin to parse the file
     run('3.3.2015.txt')
