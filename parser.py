@@ -75,7 +75,7 @@ def parse_master_row(row, unique_key=None):
     recorded_date = row[76:86]
 
     if document_amount.replace('0', '').strip() == '.':
-        document_amount = '$-'
+        document_amount = ''
 
     row_copy = row[:]
     row_copy = row_copy.replace(' ', '')
