@@ -16,14 +16,11 @@ def write_to_csv(filename, rows):
     if not isinstance(rows, (list, tuple, set)):
         rows = list(rows)
 
-    with open(filename, 'wb') as csvfile:
+    with open(filename, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter='|',
                             quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for row in rows:
-            try:
-                writer.writerow(row)
-            except:
-                pass
+            writer.writerow(row)
 
 
 def parse_master_row(row, unique_key=None):
