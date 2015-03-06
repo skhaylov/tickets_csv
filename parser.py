@@ -4,21 +4,61 @@
 __author__ = 'skhaylov'
 
 import re
-import sys
 import csv
 
 
 split_row = lambda row: [s.strip() for s in re.split('\s{3}', row) if s.strip()]
 get_record_type = lambda value: value[16]
 
+COLUMN_NAMES = {
+    'A': ["Unique_Key",
+          "Record_Type",
+          "Date_File",
+          "CRFN",
+          "Recorded_Borough",
+          "Doc_type",
+          "Document_date",
+          "Document_amount",
+          "Recorded_date",
+          "Modified_date"],
 
-def write_to_csv(filename, rows):
+    'P': ["Unique_Key",
+          "Record_Type",
+          "Party_type",
+          "Name",
+          "Address_1",
+          "Address2",
+          "Country",
+          "City",
+          "State",
+          "Zip"],
+
+    'L': ["Unique_Key",
+          "Record_Type",
+          "Borough",
+          "Block",
+          "Lot",
+          "Easement",
+          "Partial_Lot",
+          "Air_Rights",
+          "Subterranean_Rights",
+          "Property_Type",
+          "Street_number",
+          "Address",
+          "Unit"],
+    }
+
+
+def write_to_csv(filename, rows, rows_heads):
     if not isinstance(rows, (list, tuple, set)):
         rows = list(rows)
 
     with open(filename, 'w') as csvfile:
         writer = csv.writer(csvfile, delimiter='|',
                             quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+        writer.writerow(rows_heads)
+
         for row in rows:
             writer.writerow(row)
 
@@ -164,17 +204,18 @@ def run(source_file):
             pass
 
     write_lists = (
-        (PARSERS['A'][1], master_parsed_rows),
-        (PARSERS['P'][1], party_parsed_rows),
-        (PARSERS['L'][1], lot_parsed_rows),
+        (PARSERS['A'][1], master_parsed_rows, COLUMN_NAMES['A']),
+        (PARSERS['P'][1], party_parsed_rows, COLUMN_NAMES['P']),
+        (PARSERS['L'][1], lot_parsed_rows, COLUMN_NAMES['L']),
     )
 
     for item in write_lists:
         rows = item[1]
         filename = item[0]
+        rows_heads = item[2]
 
         if rows:
-            write_to_csv(filename, rows)
+            write_to_csv(filename, rows, rows_heads)
 
 
 if __name__ == '__main__':
