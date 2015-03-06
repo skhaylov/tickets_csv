@@ -23,8 +23,7 @@ def write_to_csv(filename, rows):
             try:
                 writer.writerow(row)
             except:
-                import pdb;pdb.set_trace()
-
+                pass
 
 
 def parse_master_row(row, unique_key=None):
@@ -135,14 +134,14 @@ PARSERS = {
 }
 
 
-def run(source):
+def run(source_file):
     unique_key = None
 
     master_parsed_rows = []
     party_parsed_rows = []
     lot_parsed_rows = []
 
-    for row in open(source, 'rb').readlines():
+    for row in open(source_file, 'r').readlines():
         report_type = get_record_type(row)
         parser_list = None
 
@@ -182,5 +181,4 @@ def run(source):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        run(sys.argv[1])
+    run('3.3.2015.txt')
